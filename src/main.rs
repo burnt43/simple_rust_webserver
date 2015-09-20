@@ -11,7 +11,7 @@ fn client_connection(mut stream: TcpStream) {
         match stream.read(read_slice) {
             Ok(0) => break,
             Ok(bytes_read) => {
-                let ( data, _junk ) = read_slice.split_at(bytes_read);
+                let ( data, _ ) = read_slice.split_at(bytes_read);
                 let s = String::from_utf8(data.to_vec()).unwrap();
                 buffer.push_str(&s);
                 let temp = buffer.clone();
