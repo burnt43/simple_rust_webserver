@@ -36,7 +36,7 @@ fn client_connection(mut stream: TcpStream) {
 }
 
 fn main() {
-    let listener = TcpListener::bind("104.236.40.97:3000").unwrap();
+    let listener = TcpListener::bind("104.236.40.97:80").unwrap();
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
