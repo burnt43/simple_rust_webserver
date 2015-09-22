@@ -1,3 +1,5 @@
+extern crate time;
+
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::io::prelude::*;
@@ -18,7 +20,7 @@ fn write_to_log_file(level: LogLevel, message: &str) {
         LogLevel::Info => "[INFO]",
         LogLevel::Error => "[ERROR]",
     };
-    let _ = writeln!(log_file,"{}: {}",prefix,message);
+    let _ = writeln!(log_file,"({}) {}: {}\n",time::now().strftime("%Y-%m-%d %H:%M:%S").unwrap(),prefix,message);
 }
 
 fn client_connection(mut stream: TcpStream) {
@@ -26,12 +28,22 @@ fn client_connection(mut stream: TcpStream) {
     let read_slice = &mut[0;512];
     let _          = stream.set_read_timeout(None);
 
+    let ip = match stream.peer_addr() {
+        Ok(socket_addr) => {
+            match socket_addr {
+                std::net::SocketAddr::V4(v4) => format!("{}",v4.ip()),
+                std::net::SocketAddr::V6(v6) => format!("{}",v6.ip()),
+            }
+        }
+        Err(_) => "unknown".to_string(),
+    };
+
     loop {
         match stream.read(read_slice) {
             Ok(0) => {
-                write_to_log_file(LogLevel::Error,"Read 0 Bytes. Ending Read Loop");
+                write_to_log_file(LogLevel::Info,"Read 0 Bytes. Closing Socket.");
                 break;
-            },
+            }
             Ok(bytes_read) => {
                 let ( data, _ ) = read_slice.split_at(bytes_read);
                 let text = std::str::from_utf8(data).unwrap();
@@ -41,7 +53,7 @@ fn client_connection(mut stream: TcpStream) {
                 if messages.len() > 1 {
                     let remainder = messages.pop().unwrap();
                     for message in messages {
-                        write_to_log_file(LogLevel::Info,message);
+                        write_to_log_file(LogLevel::Info,&format!("message from {}\n{}",ip,message));
                         let lines:Vec<&str> = message.lines().collect();
                         if lines[0] == "GET / HTTP/1.1" {
                             let _ = stream.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 38\r\n\r\n<html><body><h1>OK</h1></body></html>\n");
@@ -54,7 +66,7 @@ fn client_connection(mut stream: TcpStream) {
             },
             Err(_) => {
                 write_to_log_file(LogLevel::Error,"Error Reading Socket. Ending Read Loop");
-                break
+                break;
             },
         }
     }
