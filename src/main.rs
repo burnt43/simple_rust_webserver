@@ -57,9 +57,11 @@ fn client_connection(mut stream: TcpStream) {
                         let lines:Vec<&str> = message.lines().collect();
                         if lines[0] == "GET / HTTP/1.1" {
                             let response_body = "<html><body><h1>OK</h1></body></html>";
+                            write_to_log_file(LogLevel::Info,"Responded 200 OK");
                             let _ = write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",response_body.len(),response_body);
                         } else {
                             let response_body = "<html><body><h1>404</h1></body></html>";
+                            write_to_log_file(LogLevel::Info,"Responded 404 Not Found");
                             let _ = write!(stream,"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",response_body.len(),response_body);
                         }
                     }
