@@ -56,9 +56,11 @@ fn client_connection(mut stream: TcpStream) {
                         write_to_log_file(LogLevel::Info,&format!("message from {}\n{}",ip,message));
                         let lines:Vec<&str> = message.lines().collect();
                         if lines[0] == "GET / HTTP/1.1" {
-                            let _ = stream.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 38\r\n\r\n<html><body><h1>OK</h1></body></html>\n");
+                            let response_body = "<html><body><h1>OK</h1></body></html>";
+                            let _ = write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",response_body.len(),response_body);
                         } else {
-                            let _ = stream.write(b"<html><body><h1>BAD</h1></body></html>");
+                            let response_body = "<html><body><h1>404</h1></body></html>";
+                            let _ = write!(stream,"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",response_body.len(),response_body);
                         }
                     }
                     buffer = remainder.to_string();
