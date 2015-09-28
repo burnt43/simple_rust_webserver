@@ -4,11 +4,121 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::io::prelude::*;
 use std::fs::{OpenOptions};
+use std::fmt;
 
 enum LogLevel {
     Info,
     Error,
 }
+
+enum HttpVersion {
+    V1_0,
+    V1_1,
+}
+
+enum HttpVerb {
+    Get,
+}
+
+enum HttpResponseCode {
+    Ok,
+    BadRequest,
+    NotFound,
+}
+
+struct HttpMessage {
+    http_verb:    Option<HttpVerb>,
+    http_version: Option<HttpVersion>,
+    request_path: Option<String>,
+    raw_message:  String,
+}
+
+struct HttpResponse {
+    http_response_code: HttpResponseCode,
+}
+
+struct HttpMessageParser {
+    buffer: String,
+}
+
+impl HttpMessage {
+    fn http_verb_from_str( s: &str ) -> Option<HttpVerb> {
+        match &*s.to_uppercase() {
+            "GET" => Some(HttpVerb::Get),
+            _     => None,
+        }
+    }
+    fn http_version_from_str( s: &str ) -> Option<HttpVersion> {
+        match &*s.to_uppercase() {
+            "HTTP/1.0" => Some(HttpVersion::V1_0),
+            "HTTP/1.1" => Some(HttpVersion::V1_1),
+            _          => None,
+        }
+    }
+    fn create_from_str( s: &str ) -> HttpMessage {
+        let mut lines:             Vec<&str> = s.lines().collect();
+        let     request_line:      &str      = lines.remove(0);
+        let     request_line_info: Vec<&str> = request_line.split_whitespace().collect();
+        
+        if request_line_info.len() == 3 {
+            let (http_verb_str, request_path_str, http_version_str) = (request_line_info[0],request_line_info[1],request_line_info[2]);
+            HttpMessage {
+                http_verb:    HttpMessage::http_verb_from_str( http_verb_str ),
+                http_version: HttpMessage::http_version_from_str( http_version_str ),
+                request_path: Some(request_path_str.to_string()),
+                raw_message:  s.to_string(),
+            }
+        } else {
+            HttpMessage {
+                http_verb:    None,
+                http_version: None,
+                request_path: None,
+                raw_message:  s.to_string(),
+            }
+        }
+    }
+    fn is_bad_request( &self ) -> bool {
+        self.http_verb.is_none() || self.http_version.is_none() || self.request_path.is_none()
+    }
+    fn process( &self ) -> HttpResponse {
+        if self.is_bad_request() {
+            HttpResponse { http_response_code: HttpResponseCode::BadRequest }
+        } else {
+            HttpResponse { http_response_code: HttpResponseCode::BadRequest }
+        }
+    }
+}
+
+impl fmt::Display for HttpMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}",self.raw_message)
+    }
+}
+
+impl HttpMessageParser {
+    fn new() -> HttpMessageParser {
+        HttpMessageParser{ buffer: String::new() }
+    }
+    fn push_bytes( &mut self, bytes: &[u8] ) -> Vec<HttpMessage> {
+        let mut temp_buffer:   String           = self.buffer.clone();
+        let mut http_messages: Vec<HttpMessage> = Vec::new(); 
+        let bytes_as_str:      &str             = std::str::from_utf8(bytes).unwrap();
+
+        temp_buffer.push_str(bytes_as_str);
+
+        let mut message_strings: Vec<&str> = temp_buffer.split("\r\n\r\n").collect();
+
+        if message_strings.len() > 1 {
+            let remainder: &str = message_strings.pop().unwrap();
+            for message_string in message_strings {
+                http_messages.push( HttpMessage::create_from_str( message_string) );
+            }
+            self.buffer = remainder.to_string();
+        }
+        http_messages
+    }
+}
+
 
 fn write_to_log_file(level: LogLevel, message: &str) {
     let mut log_file = OpenOptions::new()
@@ -24,9 +134,9 @@ fn write_to_log_file(level: LogLevel, message: &str) {
 }
 
 fn client_connection(mut stream: TcpStream) {
-    let mut buffer = String::new();
-    let read_slice = &mut[0;512];
-    let _          = stream.set_read_timeout(None);
+    let mut http_message_parser: HttpMessageParser = HttpMessageParser::new();
+    let read_slice:              &mut[u8]          = &mut[0;512];
+    let _                                          = stream.set_read_timeout(None);
 
     let ip = match stream.peer_addr() {
         Ok(socket_addr) => {
@@ -46,26 +156,8 @@ fn client_connection(mut stream: TcpStream) {
             }
             Ok(bytes_read) => {
                 let ( data, _ ) = read_slice.split_at(bytes_read);
-                let text = std::str::from_utf8(data).unwrap();
-                buffer.push_str(text);
-                let temp = buffer.clone();
-                let mut messages:Vec<&str> = temp.split("\r\n\r\n").collect();
-                if messages.len() > 1 {
-                    let remainder = messages.pop().unwrap();
-                    for message in messages {
-                        write_to_log_file(LogLevel::Info,&format!("message from {}\n{}",ip,message));
-                        let lines:Vec<&str> = message.lines().collect();
-                        if lines[0] == "GET / HTTP/1.1" {
-                            let response_body = "<html><body><h1>OK</h1></body></html>";
-                            write_to_log_file(LogLevel::Info,"Responded 200 OK");
-                            let _ = write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",response_body.len(),response_body);
-                        } else {
-                            let response_body = "<html><body><h1>404</h1></body></html>";
-                            write_to_log_file(LogLevel::Info,"Responded 404 Not Found");
-                            let _ = write!(stream,"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",response_body.len(),response_body);
-                        }
-                    }
-                    buffer = remainder.to_string();
+                for http_message in http_message_parser.push_bytes( data ) {
+                    println!("GOT A MESSAGE\n{}",http_message);
                 }
             },
             Err(_) => {
@@ -77,7 +169,7 @@ fn client_connection(mut stream: TcpStream) {
 }
 
 fn main() {
-    let listener = TcpListener::bind("104.236.40.97:80").unwrap();
+    let listener = TcpListener::bind("104.236.40.97:3000").unwrap();
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
