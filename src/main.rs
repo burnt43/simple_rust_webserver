@@ -43,12 +43,26 @@ struct HttpMessage {
 
 struct HttpResponse {
     http_response_code: HttpResponseCode,
+    http_version:       HttpVersion,
     http_options:       HashMap<HttpOption,String>,
     body:               String,
 }
 
 struct HttpMessageParser {
     buffer: String,
+}
+
+impl HttpResponse {
+    fn default_404(http_version: HttpVersion) -> HttpResponse {
+        HttpResponse {
+            http_response_code: HttpResponseCode::NotFound,
+            http_version:       http_version,
+            http_options:       HashMap::new(),
+            body:               "".to_string(),
+        }
+    }
+    fn default_400() -> HttpResponse {
+    }
 }
 
 impl HttpMessage {
@@ -75,7 +89,7 @@ impl HttpMessage {
             HttpMessage {
                 http_verb:    HttpMessage::http_verb_from_str( http_verb_str ),
                 http_version: HttpMessage::http_version_from_str( http_version_str ),
-                request_path: Some(request_path_str.to_string()),
+                request_path: Some( request_path_str.to_string() ),
                 raw_message:  s.to_string(),
             }
         } else {
@@ -88,20 +102,15 @@ impl HttpMessage {
         }
     }
     fn process( &self ) -> HttpResponse {
-        match ( self.http_verb.clone(), self.http_version.clone(), self.request_path.clone() ) {
-            ( Some(HttpVerb::Get),Some(HttpVersion::V1_1),Some("/") ) => {
-                HttpResponse {
-                    http_response_code: HttpResponseCode::BadRequest,
-                    http_options:       HashMap::new(),
-                    body:               String::new(),
+        match self.http_verb.clone() {
+            Some(HttpVerb::Get) => {
+                if self.request_path == Some("/".to_string()) {
+                } else {
                 }
             },
-            (_,_,_)                                      => {
-                HttpResponse {
-                    http_response_code: HttpResponseCode::BadRequest,
-                    http_options:       HashMap::new(),
-                    body:               String::new(),
-                }
+            Some(_)             => {
+            },
+            _                   => {
             },
         }
     }
