@@ -5,17 +5,20 @@ use std::thread;
 use std::io::prelude::*;
 use std::fs::{OpenOptions};
 use std::fmt;
+use std::collections::{HashMap};
 
 enum LogLevel {
     Info,
     Error,
 }
 
+#[derive(PartialEq, Eq, Debug)]
 enum HttpVersion {
     V1_0,
     V1_1,
 }
 
+#[derive(PartialEq, Eq, Debug)]
 enum HttpVerb {
     Get,
 }
@@ -24,6 +27,11 @@ enum HttpResponseCode {
     Ok,
     BadRequest,
     NotFound,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+enum HttpOption {
+    ContentType,
 }
 
 struct HttpMessage {
@@ -35,6 +43,8 @@ struct HttpMessage {
 
 struct HttpResponse {
     http_response_code: HttpResponseCode,
+    http_options:       HashMap<HttpOption,String>,
+    body:               String,
 }
 
 struct HttpMessageParser {
@@ -77,14 +87,22 @@ impl HttpMessage {
             }
         }
     }
-    fn is_bad_request( &self ) -> bool {
-        self.http_verb.is_none() || self.http_version.is_none() || self.request_path.is_none()
-    }
     fn process( &self ) -> HttpResponse {
-        if self.is_bad_request() {
-            HttpResponse { http_response_code: HttpResponseCode::BadRequest }
+        if let Some(http_verb)  = self.http_verb {
+            if http_verb == HttpVerb::Get {
+                println!("WJIWJOWIJWOIWJ");
+            }
+            HttpResponse {
+                http_response_code: HttpResponseCode::BadRequest,
+                http_options:       HashMap::new(),
+                body:               String::new(),
+            }
         } else {
-            HttpResponse { http_response_code: HttpResponseCode::BadRequest }
+            HttpResponse {
+                http_response_code: HttpResponseCode::BadRequest,
+                http_options:       HashMap::new(),
+                body:               String::new(),
+            }
         }
     }
 }
@@ -92,6 +110,16 @@ impl HttpMessage {
 impl fmt::Display for HttpMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,"{}",self.raw_message)
+    }
+}
+
+impl fmt::Debug for HttpMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"HttpMessage\nhttp_verb: {:?}\nhttp_version: {:?}\nrequest_path: {:?}\nraw_message: {}\n\n",
+               self.http_verb,
+               self.http_version,
+               self.request_path,
+               self.raw_message)
     }
 }
 
@@ -157,7 +185,8 @@ fn client_connection(mut stream: TcpStream) {
             Ok(bytes_read) => {
                 let ( data, _ ) = read_slice.split_at(bytes_read);
                 for http_message in http_message_parser.push_bytes( data ) {
-                    println!("GOT A MESSAGE\n{}",http_message);
+                    let http_response: HttpResponse = http_message.process();
+                    println!("{:?}",http_message);
                 }
             },
             Err(_) => {
