@@ -12,13 +12,13 @@ enum LogLevel {
     Error,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 enum HttpVersion {
     V1_0,
     V1_1,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 enum HttpVerb {
     Get,
 }
@@ -88,21 +88,21 @@ impl HttpMessage {
         }
     }
     fn process( &self ) -> HttpResponse {
-        if let Some(http_verb)  = self.http_verb {
-            if http_verb == HttpVerb::Get {
-                println!("WJIWJOWIJWOIWJ");
-            }
-            HttpResponse {
-                http_response_code: HttpResponseCode::BadRequest,
-                http_options:       HashMap::new(),
-                body:               String::new(),
-            }
-        } else {
-            HttpResponse {
-                http_response_code: HttpResponseCode::BadRequest,
-                http_options:       HashMap::new(),
-                body:               String::new(),
-            }
+        match ( self.http_verb.clone(), self.http_version.clone(), self.request_path.clone() ) {
+            ( Some(HttpVerb::Get),Some(HttpVersion::V1_1),Some("/") ) => {
+                HttpResponse {
+                    http_response_code: HttpResponseCode::BadRequest,
+                    http_options:       HashMap::new(),
+                    body:               String::new(),
+                }
+            },
+            (_,_,_)                                      => {
+                HttpResponse {
+                    http_response_code: HttpResponseCode::BadRequest,
+                    http_options:       HashMap::new(),
+                    body:               String::new(),
+                }
+            },
         }
     }
 }
@@ -142,6 +142,8 @@ impl HttpMessageParser {
                 http_messages.push( HttpMessage::create_from_str( message_string) );
             }
             self.buffer = remainder.to_string();
+        } else {
+            self.buffer = temp_buffer;
         }
         http_messages
     }
