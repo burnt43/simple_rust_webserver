@@ -54,28 +54,60 @@ struct HttpMessageParser {
 
 impl HttpResponse {
     fn default_200(http_version: HttpVersion) -> HttpResponse {
+        let mut http_options: HashMap<HttpOption,String> = HashMap::new();
+        http_options.insert(HttpOption::ContentType,"text/html".to_string());
+
         HttpResponse {
             http_response_code: HttpResponseCode::Ok,
             http_version:       http_version,
-            http_options:       HashMap::new(),
+            http_options:       http_options,
             body:               "<html><body><h1>200 OK</h1></body></html>".to_string(),
         }
     }
     fn default_404(http_version: HttpVersion) -> HttpResponse {
+        let mut http_options: HashMap<HttpOption,String> = HashMap::new();
+        http_options.insert(HttpOption::ContentType,"text/html".to_string());
+
         HttpResponse {
             http_response_code: HttpResponseCode::NotFound,
             http_version:       http_version,
-            http_options:       HashMap::new(),
+            http_options:       http_options,
             body:               "<html><body><h1>404 Not Found</h1></body></html>".to_string(),
         }
     }
     fn default_400() -> HttpResponse {
+        let mut http_options: HashMap<HttpOption,String> = HashMap::new();
+        http_options.insert(HttpOption::ContentType,"text/html".to_string());
+
         HttpResponse {
             http_response_code: HttpResponseCode::BadRequest,
             http_version:       HttpVersion::V1_0,
-            http_options:       HashMap::new(),
+            http_options:       http_options,
             body:               "<html><body><h1>400 Bad Request</h1></body></html>".to_string(),
         }
+    }
+    fn as_string(&self) -> String {
+        let mut result: String = String::new();
+        match self.http_version {
+            HttpVersion::V1_0 => result.push_str( "HTTP/1.0" ),
+            HttpVersion::V1_1 => result.push_str( "HTTP/1.1" ),
+        }
+        result.push_str(" ");
+        match self.http_response_code {
+            HttpResponseCode::Ok         => result.push_str( "200 OK" ),
+            HttpResponseCode::NotFound   => result.push_str( "404 Not Found" ),
+            HttpResponseCode::BadRequest => result.push_str( "400 Bad Request" ),
+        }
+        result.push_str("\r\n");
+        for (http_options,value) in &self.http_options {
+            match *http_options {
+                HttpOption::ContentType => {
+                    result.push_str( &format!("Content-Type: {}\r\n", value) )
+                }
+            }
+        }
+        result.push_str( &format!("Content-Length: {}\r\n\r\n{}",self.body.len(),self.body) );
+        result
     }
 }
 
@@ -211,8 +243,11 @@ fn client_connection(mut stream: TcpStream) {
             Ok(bytes_read) => {
                 let ( data, _ ) = read_slice.split_at(bytes_read);
                 for http_message in http_message_parser.push_bytes( data ) {
-                    let http_response: HttpResponse = http_message.process();
-                    println!("{:?}",http_message);
+                    write_to_log_file( LogLevel::Info, &format!("Received from {}\n{:?}",ip,http_message) );
+                    let http_response:   HttpResponse = http_message.process();
+                    let response_string: String       = http_response.as_string();
+                    write_to_log_file( LogLevel::Info, &format!("Responding\n{}",response_string) );
+                    let _ = write!(stream,"{}",response_string);
                 }
             },
             Err(_) => {
@@ -224,7 +259,7 @@ fn client_connection(mut stream: TcpStream) {
 }
 
 fn main() {
-    let listener = TcpListener::bind("104.236.40.97:3000").unwrap();
+    let listener = TcpListener::bind("104.236.40.97:80").unwrap();
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
