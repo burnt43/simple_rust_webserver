@@ -53,15 +53,29 @@ struct HttpMessageParser {
 }
 
 impl HttpResponse {
+    fn default_200(http_version: HttpVersion) -> HttpResponse {
+        HttpResponse {
+            http_response_code: HttpResponseCode::Ok,
+            http_version:       http_version,
+            http_options:       HashMap::new(),
+            body:               "<html><body><h1>200 OK</h1></body></html>".to_string(),
+        }
+    }
     fn default_404(http_version: HttpVersion) -> HttpResponse {
         HttpResponse {
             http_response_code: HttpResponseCode::NotFound,
             http_version:       http_version,
             http_options:       HashMap::new(),
-            body:               "".to_string(),
+            body:               "<html><body><h1>404 Not Found</h1></body></html>".to_string(),
         }
     }
     fn default_400() -> HttpResponse {
+        HttpResponse {
+            http_response_code: HttpResponseCode::BadRequest,
+            http_version:       HttpVersion::V1_0,
+            http_options:       HashMap::new(),
+            body:               "<html><body><h1>400 Bad Request</h1></body></html>".to_string(),
+        }
     }
 }
 
@@ -102,15 +116,16 @@ impl HttpMessage {
         }
     }
     fn process( &self ) -> HttpResponse {
-        match self.http_verb.clone() {
-            Some(HttpVerb::Get) => {
-                if self.request_path == Some("/".to_string()) {
+        match ( self.http_verb.clone(), self.http_version.clone(), self.request_path.clone() ) {
+            ( Some(http_verb), Some(http_version), Some(request_path) ) => {
+                if http_verb == HttpVerb::Get && &request_path == "/" {
+                    HttpResponse::default_200(http_version)
                 } else {
+                    HttpResponse::default_404(http_version)
                 }
             },
-            Some(_)             => {
-            },
-            _                   => {
+            ( _, _, _ ) => {
+                HttpResponse::default_400()
             },
         }
     }
@@ -152,7 +167,7 @@ impl HttpMessageParser {
             }
             self.buffer = remainder.to_string();
         } else {
-            self.buffer = temp_buffer;
+            self.buffer = temp_buffer.clone();
         }
         http_messages
     }
