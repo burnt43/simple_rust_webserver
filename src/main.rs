@@ -75,7 +75,9 @@ struct HttpResponseBuilder {
 impl HttpResponseBuilder {
     fn new () -> HttpResponseBuilder {
         let mut http_options: HashMap<HttpOption,String> = HashMap::new();
-        http_options.insert(HttpOption::ContentType,"text/html".to_string());
+        http_options.insert(HttpOption::Date,HttpResponse::current_timestamp());
+        http_options.insert(HttpOption::Server,"simple_rust_webserver (https://github.com/burnt43/simple_rust_webserver)".to_string());
+        http_options.insert(HttpOption::ContentType,"text/html; charset=utf-8".to_string());
 
         HttpResponseBuilder {
             http_response_code: HttpResponseCode::BadRequest,
@@ -111,6 +113,9 @@ impl HttpResponseBuilder {
 }
 
 impl HttpResponse {
+    fn current_timestamp () -> String {
+        time::strftime("%a, %d %b %Y %H:%M:%S GMT",&time::now_utc()).unwrap()
+    }
     fn as_string(&self) -> String {
         let mut result: String = String::new();
         match self.http_version {
