@@ -33,6 +33,18 @@ enum HttpResponseCode {
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum HttpOption {
     ContentType,
+    Date,
+    Server,
+}
+
+impl fmt::Display for HttpOption {
+    fn fmt (&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}", match *self {
+            HttpOption::ContentType => "Content-Type",
+            HttpOption::Date        => "Date",
+            HttpOption::Server      => "Server",
+        })
+    }
 }
 
 struct HttpMessage {
@@ -69,7 +81,7 @@ impl HttpResponseBuilder {
             http_response_code: HttpResponseCode::BadRequest,
             http_version:       HttpVersion::V1_0,
             http_options:       http_options,
-            body:               "<html><body><h1>400 Bad Request</h1></body></html>".to_string(),
+            body:               "<html><body><h1>400 Bad Request</h1></body></html>\n".to_string(),
         }
     }
     fn http_response_code (&mut self, http_response_code: HttpResponseCode) -> &mut HttpResponseBuilder {
@@ -112,12 +124,8 @@ impl HttpResponse {
             HttpResponseCode::BadRequest => result.push_str( "400 Bad Request" ),
         }
         result.push_str("\r\n");
-        for (http_options,value) in &self.http_options {
-            match *http_options {
-                HttpOption::ContentType => {
-                    result.push_str( &format!("Content-Type: {}\r\n", value) )
-                }
-            }
+        for (http_option,value) in &self.http_options {
+            result.push_str( &format!("{}: {}\r\n", http_option,value) )
         }
         result.push_str( &format!("Content-Length: {}\r\n\r\n{}",self.body.len(),self.body) );
         result
@@ -167,13 +175,13 @@ impl HttpMessage {
                     HttpResponseBuilder::new()
                         .http_response_code(HttpResponseCode::Ok)
                         .http_version(HttpVersion::V1_1)
-                        .body("<html><body><h1>200 OK</h1></body></html>")
+                        .body("<html><body><h1>200 OK</h1></body></html>\n")
                         .finalize()
                 } else {
                     HttpResponseBuilder::new()
                         .http_response_code(HttpResponseCode::NotFound)
                         .http_version(HttpVersion::V1_1)
-                        .body("<html><body><h1>404 Not Found</h1></body></html>")
+                        .body("<html><body><h1>404 Not Found</h1></body></html>\n")
                         .finalize()
                 }
             },
