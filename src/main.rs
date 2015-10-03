@@ -23,13 +23,14 @@ enum HttpVerb {
     Get,
 }
 
+#[derive(Clone)]
 enum HttpResponseCode {
     Ok,
     BadRequest,
     NotFound,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 enum HttpOption {
     ContentType,
 }
@@ -41,6 +42,10 @@ struct HttpMessage {
     raw_message:  String,
 }
 
+struct HttpMessageParser {
+    buffer: String,
+}
+
 struct HttpResponse {
     http_response_code: HttpResponseCode,
     http_version:       HttpVersion,
@@ -48,44 +53,52 @@ struct HttpResponse {
     body:               String,
 }
 
-struct HttpMessageParser {
-    buffer: String,
+struct HttpResponseBuilder {
+    http_response_code: HttpResponseCode,
+    http_version:       HttpVersion,
+    http_options:       HashMap<HttpOption,String>,
+    body:               String,
 }
 
-impl HttpResponse {
-    fn default_200(http_version: HttpVersion) -> HttpResponse {
+impl HttpResponseBuilder {
+    fn new () -> HttpResponseBuilder {
         let mut http_options: HashMap<HttpOption,String> = HashMap::new();
         http_options.insert(HttpOption::ContentType,"text/html".to_string());
 
-        HttpResponse {
-            http_response_code: HttpResponseCode::Ok,
-            http_version:       http_version,
-            http_options:       http_options,
-            body:               "<html><body><h1>200 OK</h1></body></html>".to_string(),
-        }
-    }
-    fn default_404(http_version: HttpVersion) -> HttpResponse {
-        let mut http_options: HashMap<HttpOption,String> = HashMap::new();
-        http_options.insert(HttpOption::ContentType,"text/html".to_string());
-
-        HttpResponse {
-            http_response_code: HttpResponseCode::NotFound,
-            http_version:       http_version,
-            http_options:       http_options,
-            body:               "<html><body><h1>404 Not Found</h1></body></html>".to_string(),
-        }
-    }
-    fn default_400() -> HttpResponse {
-        let mut http_options: HashMap<HttpOption,String> = HashMap::new();
-        http_options.insert(HttpOption::ContentType,"text/html".to_string());
-
-        HttpResponse {
+        HttpResponseBuilder {
             http_response_code: HttpResponseCode::BadRequest,
             http_version:       HttpVersion::V1_0,
             http_options:       http_options,
             body:               "<html><body><h1>400 Bad Request</h1></body></html>".to_string(),
         }
     }
+    fn http_response_code (&mut self, http_response_code: HttpResponseCode) -> &mut HttpResponseBuilder {
+        self.http_response_code = http_response_code;
+        self
+    }
+    fn http_version (&mut self, http_version: HttpVersion) -> &mut HttpResponseBuilder {
+        self.http_version = http_version;
+        self
+    }
+    fn http_options (&mut self, pair: (HttpOption,String)) -> &mut HttpResponseBuilder {
+        self.http_options.insert(pair.0,pair.1);
+        self
+    }
+    fn body (&mut self, body: &str) -> &mut HttpResponseBuilder {
+        self.body = body.to_string();
+        self
+    }
+    fn finalize (&self) -> HttpResponse {
+        HttpResponse {
+            http_response_code: self.http_response_code.clone(),
+            http_version:       self.http_version.clone(),
+            http_options:       self.http_options.clone(),
+            body:               self.body.clone(),
+        }
+    }
+}
+
+impl HttpResponse {
     fn as_string(&self) -> String {
         let mut result: String = String::new();
         match self.http_version {
@@ -151,13 +164,22 @@ impl HttpMessage {
         match ( self.http_verb.clone(), self.http_version.clone(), self.request_path.clone() ) {
             ( Some(http_verb), Some(http_version), Some(request_path) ) => {
                 if http_verb == HttpVerb::Get && &request_path == "/" {
-                    HttpResponse::default_200(http_version)
+                    HttpResponseBuilder::new()
+                        .http_response_code(HttpResponseCode::Ok)
+                        .http_version(HttpVersion::V1_1)
+                        .body("<html><body><h1>200 OK</h1></body></html>")
+                        .finalize()
                 } else {
-                    HttpResponse::default_404(http_version)
+                    HttpResponseBuilder::new()
+                        .http_response_code(HttpResponseCode::NotFound)
+                        .http_version(HttpVersion::V1_1)
+                        .body("<html><body><h1>404 Not Found</h1></body></html>")
+                        .finalize()
                 }
             },
             ( _, _, _ ) => {
-                HttpResponse::default_400()
+                HttpResponseBuilder::new()
+                    .finalize()
             },
         }
     }
